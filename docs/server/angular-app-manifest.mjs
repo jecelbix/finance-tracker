@@ -2,7 +2,7 @@
 export default {
   bootstrap: () => import('./main.server.mjs').then(m => m.default),
   inlineCriticalCss: true,
-  baseHref: '/finance-tracker',
+  baseHref: '/finance-tracker/',
   locale: undefined,
   routes: [
   {
@@ -12,9 +12,9 @@ export default {
 ],
   entryPointToBrowserMapping: undefined,
   assets: {
-    'index.csr.html': {size: 60584, hash: '125275c47337f6bb4becf985f81a68bab8c7da7594a44c19117b8b755257db67', text: () => import('./assets-chunks/index_csr_html.mjs').then(m => m.default)},
-    'index.server.html': {size: 17076, hash: '2f6cb9975116a630f0160962a15cc2fbf17de4a12d7b93f2aadadff3e066d762', text: () => import('./assets-chunks/index_server_html.mjs').then(m => m.default)},
-    'index.html': {size: 108312, hash: '82978663aa0db9870768db83c6cc7920d410f64f74d613cf0aafdcbf9f861b94', text: () => import('./assets-chunks/index_html.mjs').then(m => m.default)},
+    'index.csr.html': {size: 60585, hash: '46277621abc2db47926abcc585b632359a6042962046f513389fa5dcd93fa26c', text: () => import('./assets-chunks/index_csr_html.mjs').then(m => m.default)},
+    'index.server.html': {size: 17077, hash: 'e9e556265d2a10f2a106e68eee5eacee444c4bf8a4bfcbd7a2c0615325644e38', text: () => import('./assets-chunks/index_server_html.mjs').then(m => m.default)},
+    'index.html': {size: 108313, hash: '0f97300593d75e2f78325388dffc77ad3b36081f5faffe8ab1c488cd5c975269', text: () => import('./assets-chunks/index_html.mjs').then(m => m.default)},
     'styles-7AVBGXRZ.css': {size: 85747, hash: 'w6PL3DQQpHE', text: () => import('./assets-chunks/styles-7AVBGXRZ_css.mjs').then(m => m.default)}
   },
 };
