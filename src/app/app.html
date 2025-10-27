@@ -1,0 +1,231 @@
+<div class="container">
+  <mat-toolbar color="primary">
+    <span>Finance Pivot Tracker</span>
+  </mat-toolbar>
+  
+  <div class="content">
+    <!-- Floating Action Menu -->
+    <div class="fab-menu">
+      <button mat-mini-fab color="primary" [matMenuTriggerFor]="menu">
+        <mat-icon>{{showFabMenu ? 'close' : 'menu'}}</mat-icon>
+      </button>
+      
+      <mat-menu #menu="matMenu">
+        <!-- <button mat-menu-item (click)="resetData()">
+          <mat-icon>refresh</mat-icon> Reset Data
+        </button> -->
+        <button mat-menu-item (click)="addEntry('outgoing')">
+          <mat-icon>remove</mat-icon> Outgoing
+        </button>
+        <button mat-menu-item (click)="addEntry('incoming')">
+          <mat-icon>add</mat-icon> Incoming
+        </button>
+        <button mat-menu-item (click)="downloadData()">
+          <mat-icon>download</mat-icon> Download
+        </button>
+        <button mat-menu-item (click)="fileInput.click()">
+          <mat-icon>upload</mat-icon> Upload
+        </button>
+      </mat-menu>
+      
+      <input type="file" #fileInput (change)="uploadData($event)" accept=".json" style="display: none" />
+    </div>
+
+    <mat-card class="pivot-table-card">
+      <table class="mat-table">
+        <thead>
+          <tr>
+            <th class="sticky-cell">Edit</th>
+            <th class="sticky-cell">Description</th>
+            @for (period of periods; track period) {
+              <th class="sticky-cell">{{period}}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (bank of getBankKeys(); track bank) {
+            <tr class="bank-group">
+              <td [attr.colspan]="2">{{bank}}</td>
+              <td [attr.colspan]="periods.length"></td>
+            </tr>
+            @for (desc of getOutgoingDescriptions(bank); track desc) {
+              <tr>
+                <td class="sticky-cell">
+                  <button mat-icon-button class="mat-icon-button" color="primary" (click)="editEntryById(getEntryId(bank, desc))">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                </td>
+                <td class="sticky-cell">{{desc}}</td>
+                @for (period of periods; track period) {
+                  <td class="amount sticky-cell editable-cell" 
+                      (click)="startCellEdit(getEntryId(bank, desc), period, getAmount(bank, desc, period, 'outgoing'))">
+                    @if (isEditing(getEntryId(bank, desc), period)) {
+                      <input class="editing-input" 
+                             [(ngModel)]="editingValue" 
+                             (blur)="saveCellEdit()" 
+                             (keydown.enter)="saveCellEdit()" 
+                             (keydown.escape)="cancelCellEdit()" 
+                             type="number" 
+                             step="0.01">
+                    } @else {
+                      {{getAmount(bank, desc, period, 'outgoing') | number:'1.2-2'}}
+                    }
+                  </td>
+                }
+              </tr>
+            }
+          }
+          
+          @if (getIncomingDescriptions().length > 0) {
+            <tr class="bank-group">
+             <td [attr.colspan]="2">Incoming</td>
+              <td [attr.colspan]="periods.length"></td>
+            </tr>
+            @for (desc of getIncomingDescriptions(); track desc) {
+              <tr>
+                <td class="sticky-cell">
+                  <button mat-icon-button class="mat-icon-button" (click)="editEntryById(getIncomingEntryId(desc))">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                </td>
+                <td class="sticky-cell">{{desc}}</td>
+                @for (period of periods; track period) {
+                  <td class="amount positive sticky-cell editable-cell" 
+                      (click)="startCellEdit(getIncomingEntryId(desc), period, getAmount('', desc, period, 'incoming'))">
+                    @if (isEditing(getIncomingEntryId(desc), period)) {
+                      <input class="editing-input" 
+                             [(ngModel)]="editingValue" 
+                             (blur)="saveCellEdit()" 
+                             (keydown.enter)="saveCellEdit()" 
+                             (keydown.escape)="cancelCellEdit()" 
+                             type="number" 
+                             step="0.01">
+                    } @else {
+                      {{getAmount('', desc, period, 'incoming') > 0 ? '+' + (getAmount('', desc, period, 'incoming') | number:'1.2-2') : ''}}
+                    }
+                  </td>
+                }
+              </tr>
+            }
+          }
+        </tbody>
+        <tfoot>
+          <!-- Totals -->
+          <tr class="total-row outgoing-total">
+            <td class="sticky-cell"></td>
+            <td class="sticky-cell"><strong>Total Outgoing</strong></td>
+            @for (period of periods; track period) {
+              <td class="amount sticky-cell">
+                <strong>{{getTotalOutgoing(period) | number:'1.2-2'}}</strong>
+              </td>
+            }
+          </tr>
+          
+          <tr class="total-row incoming-total">
+            <td class="sticky-cell"></td>
+            <td class="sticky-cell"><strong>Total Incoming</strong></td>
+            @for (period of periods; track period) {
+              <td class="amount positive sticky-cell">
+                <strong>+{{getTotalIncoming(period) | number:'1.2-2'}}</strong>
+              </td>
+            }
+          </tr>
+          
+          <tr class="total-row net-total">
+            <td class="sticky-cell"></td>
+            <td class="sticky-cell"><strong>Net</strong></td>
+            @for (period of periods; track period) {
+              <td class="amount sticky-cell" [class.positive]="getNet(period) > 0" [class.negative]="getNet(period) < 0">
+                <strong>{{getNet(period) > 0 ? '+' : ''}}{{getNet(period) | number:'1.2-2'}}</strong>
+              </td>
+            }
+          </tr>
+          
+          <tr class="total-row adjustment-total">
+            <td class="sticky-cell"></td>
+            <td class="sticky-cell"><strong>Previous Period Adjustment</strong></td>
+            @for (period of periods; track period) {
+              <td class="amount sticky-cell" [class.positive]="getPreviousPeriodAdjustment(period) > 0" [class.negative]="getPreviousPeriodAdjustment(period) < 0">
+                <strong>{{getPreviousPeriodAdjustment(period) > 0 ? '+' : ''}}{{getPreviousPeriodAdjustment(period) | number:'1.2-2'}}</strong>
+              </td>
+            }
+          </tr>
+          
+          <tr class="total-row final-balance">
+            <td class="sticky-cell"></td>
+            <td class="sticky-cell"><strong>Adjusted Balance</strong></td>
+            @for (period of periods; track period) {
+              <td class="amount sticky-cell" [class.positive]="getAdjustedBalance(period) > 0" [class.negative]="getAdjustedBalance(period) < 0">
+                <strong>{{getAdjustedBalance(period) > 0 ? '+' : ''}}{{getAdjustedBalance(period) | number:'1.2-2'}}</strong>
+              </td>
+            }
+          </tr>
+        </tfoot>
+      </table>
+    </mat-card>
+  </div>
+</div>
+
+<!-- Entry Dialog -->
+@if (showModal) {
+  <div class="modal-backdrop" (click)="closeModal()"></div>
+  <mat-card class="entry-dialog">
+  <mat-card-header>
+    <mat-card-title>{{editingEntry ? 'Edit Entry' : 'Add Entry'}}</mat-card-title>
+  </mat-card-header>
+  
+  <mat-card-content>
+    <form #entryForm="ngForm">
+      <mat-form-field appearance="outline">
+        <mat-label>Type</mat-label>
+        <mat-select [(ngModel)]="currentEntry.type" name="type" required>
+          <mat-option value="outgoing">Outgoing</mat-option>
+          <mat-option value="incoming">Incoming</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      @if (currentEntry.type === 'outgoing') {
+        <mat-form-field appearance="outline">
+          <mat-label>Bank</mat-label>
+          <input matInput [(ngModel)]="currentEntry.bank" name="bank" />
+        </mat-form-field>
+      }
+
+      <mat-form-field appearance="outline">
+        <mat-label>Description</mat-label>
+        <input matInput [(ngModel)]="currentEntry.description" name="description" required />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Amount</mat-label>
+        <input matInput type="number" [(ngModel)]="currentEntry.amount" name="amount" required step="0.01" min="0" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Start Month</mat-label>
+        <input matInput type="month" [(ngModel)]="currentEntry.startMonth" name="startMonth" required />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Period</mat-label>
+        <mat-select [(ngModel)]="currentEntry.reflection" name="reflection" required>
+          <mat-option [value]="15">15th</mat-option>
+          <mat-option [value]="30">30th</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Billing Cycles (0 = infinite)</mat-label>
+        <input matInput type="number" [(ngModel)]="currentEntry.cycles" name="cycles" min="0" />
+      </mat-form-field>
+    </form>
+
+    <button mat-raised-button color="primary" class="fill-button" (click)="saveEntry()">Save</button>
+    @if (editingEntry) {
+      <button mat-raised-button color="warn" class="fill-button" (click)="deleteEntry()">Delete</button>
+    }
+    <button mat-button color="warn" class="fill-button" (click)="closeModal()">Cancel</button>
+
+  </mat-card-content>
+  </mat-card>
+}
