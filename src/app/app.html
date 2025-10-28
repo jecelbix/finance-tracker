@@ -1,16 +1,12 @@
 <div class="container">
   <mat-toolbar color="primary">
-    <span>Finance Pivot Tracker</span>
-  </mat-toolbar>
-  
-  <div class="content">
-    <!-- Floating Action Menu -->
-    <div class="fab-menu">
-      <button mat-mini-fab color="primary" [matMenuTriggerFor]="menu">
-        <mat-icon>{{showFabMenu ? 'close' : 'menu'}}</mat-icon>
-      </button>
-      
-      <mat-menu #menu="matMenu">
+      <div>Finance Pivot Tracker</div>
+
+      <div>
+        <button mat-mini-fab color="primary" [matMenuTriggerFor]="menu">
+          <mat-icon>{{showFabMenu ? 'close' : 'menu'}}</mat-icon>
+        </button>
+        <mat-menu #menu="matMenu">
         <!-- <button mat-menu-item (click)="resetData()">
           <mat-icon>refresh</mat-icon> Reset Data
         </button> -->
@@ -26,11 +22,12 @@
         <button mat-menu-item (click)="fileInput.click()">
           <mat-icon>upload</mat-icon> Upload
         </button>
+        <input type="file" #fileInput (change)="uploadData($event)" accept=".json" style="display: none" />
       </mat-menu>
-      
-      <input type="file" #fileInput (change)="uploadData($event)" accept=".json" style="display: none" />
     </div>
-
+  </mat-toolbar>
+  
+  <div class="content">
     <mat-card class="pivot-table-card">
       <table class="mat-table">
         <thead>
@@ -45,8 +42,24 @@
         <tbody>
           @for (bank of getBankKeys(); track bank) {
             <tr class="bank-group">
-              <td [attr.colspan]="2">{{bank}}</td>
-              <td [attr.colspan]="periods.length"></td>
+              <td class="sticky-cell"></td>
+              <td class="sticky-cell"><strong>{{bank}}</strong></td>
+              @for (period of periods; track period) {
+                <td class="amount sticky-cell editable-cell" 
+                    (click)="startBankCellEdit(bank, period)">
+                  @if (isBankEditing(bank, period)) {
+                    <input class="editing-input" 
+                           [(ngModel)]="editingValue" 
+                           (blur)="saveBankCellEdit()" 
+                           (keydown.enter)="saveBankCellEdit()" 
+                           (keydown.escape)="cancelBankCellEdit()" 
+                           type="number" 
+                           step="0.01">
+                  } @else {
+                    <strong>{{getBankTotal(bank, period) | number:'1.2-2'}}</strong>
+                  }
+                </td>
+              }
             </tr>
             @for (desc of getOutgoingDescriptions(bank); track desc) {
               <tr>
@@ -78,8 +91,13 @@
           
           @if (getIncomingDescriptions().length > 0) {
             <tr class="bank-group">
-             <td [attr.colspan]="2">Incoming</td>
-              <td [attr.colspan]="periods.length"></td>
+              <td class="sticky-cell"></td>
+              <td class="sticky-cell"><strong>Incoming</strong></td>
+              @for (period of periods; track period) {
+                <td class="amount positive sticky-cell">
+                  <strong>+{{getTotalIncoming(period) | number:'1.2-2'}}</strong>
+                </td>
+              }
             </tr>
             @for (desc of getIncomingDescriptions(); track desc) {
               <tr>
@@ -163,6 +181,7 @@
         </tfoot>
       </table>
     </mat-card>
+    <div class="end-spacer"></div>
   </div>
 </div>
 
@@ -208,7 +227,7 @@
 
       <mat-form-field appearance="outline">
         <mat-label>Period</mat-label>
-        <mat-select [(ngModel)]="currentEntry.reflection" name="reflection" required>
+        <mat-select [(ngModel)]="currentEntry.reflection" name="reflection" required multiple>
           <mat-option [value]="15">15th</mat-option>
           <mat-option [value]="30">30th</mat-option>
         </mat-select>
