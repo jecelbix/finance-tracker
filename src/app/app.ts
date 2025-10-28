@@ -17,7 +17,7 @@ interface Entry {
   description: string;
   amount: number;
   startMonth: string;
-  reflection: number;
+  reflection: number[];
   cycles: number;
 }
 
@@ -49,7 +49,10 @@ export class App {
   periods: string[] = [];
   bankGroups: any = {};
   incomingEntries: any = {};
+  bankAdjustments: { [bank: string]: { [period: string]: number } } = {};
+  cellAdjustments: { [entryId: string]: { [period: string]: number } } = {};
   editingCell: { entryId: string; period: string } | null = null;
+  editingBankCell: { bank: string; period: string } | null = null;
   editingValue = '';
 
   constructor() {
@@ -65,7 +68,7 @@ export class App {
       description: '',
       amount: 0,
       startMonth: '',
-      reflection: 15,
+      reflection: [15],
       cycles: 0
     };
   }
@@ -82,12 +85,22 @@ export class App {
   private loadEntries(): void {
     if (typeof localStorage !== 'undefined') {
       this.entries = JSON.parse(localStorage.getItem('entries') || '[]');
+      // Migrate old reflection format to array
+      this.entries.forEach(entry => {
+        if (typeof entry.reflection === 'number') {
+          entry.reflection = [entry.reflection];
+        }
+      });
+      this.bankAdjustments = JSON.parse(localStorage.getItem('bankAdjustments') || '{}');
+      this.cellAdjustments = JSON.parse(localStorage.getItem('cellAdjustments') || '{}');
     }
   }
 
   private saveEntries(): void {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('entries', JSON.stringify(this.entries));
+      localStorage.setItem('bankAdjustments', JSON.stringify(this.bankAdjustments));
+      localStorage.setItem('cellAdjustments', JSON.stringify(this.cellAdjustments));
     }
   }
 
@@ -102,6 +115,8 @@ export class App {
       const index = this.entries.findIndex(e => e.id === this.editingEntry!.id);
       if (index !== -1) {
         this.entries[index] = { ...this.currentEntry };
+        // Clear cell adjustments for periods not covered by new configuration
+        this.clearInvalidCellAdjustments(this.editingEntry.id, this.currentEntry);
       }
     } else {
       this.currentEntry.id = this.safeUUID();
@@ -111,6 +126,42 @@ export class App {
     this.saveEntries();
     this.renderPivot();
     this.closeModal();
+  }
+
+  private clearInvalidCellAdjustments(entryId: string, entry: Entry): void {
+    if (!this.cellAdjustments[entryId]) return;
+    
+    const months = this.generateMonths();
+    const validPeriods = new Set<string>();
+    
+    // Calculate which periods are valid for this entry
+    months.forEach(m => {
+      ["15", "30"].forEach(day => {
+        const monthDate = new Date(m + "-01");
+        const startDate = new Date(entry.startMonth + "-01");
+        const diffMonths = (monthDate.getFullYear() - startDate.getFullYear()) * 12 + (monthDate.getMonth() - startDate.getMonth());
+        
+        const dateLabel = new Date(m + "-01");
+        const monthName = dateLabel.toLocaleString("default", {month: "long"});
+        const periodKey = `${monthName} ${day}th`;
+        
+        if (diffMonths >= 0 && (entry.cycles === 0 || diffMonths < entry.cycles) && entry.reflection.includes(parseInt(day))) {
+          validPeriods.add(periodKey);
+        }
+      });
+    });
+    
+    // Remove adjustments for invalid periods
+    Object.keys(this.cellAdjustments[entryId]).forEach(period => {
+      if (!validPeriods.has(period)) {
+        delete this.cellAdjustments[entryId][period];
+      }
+    });
+    
+    // Clean up empty adjustment objects
+    if (Object.keys(this.cellAdjustments[entryId]).length === 0) {
+      delete this.cellAdjustments[entryId];
+    }
   }
 
   deleteEntry(): void {
@@ -210,7 +261,7 @@ export class App {
           const monthName = dateLabel.toLocaleString("default", {month: "long"});
           const periodKey = `${monthName} ${day}th`;
           
-          if (diffMonths >= 0 && (entry.cycles === 0 || diffMonths < entry.cycles) && entry.reflection.toString() === day) {
+          if (diffMonths >= 0 && (entry.cycles === 0 || diffMonths < entry.cycles) && entry.reflection.includes(parseInt(day))) {
             if (entry.type === 'incoming') {
               this.incomingEntries[entry.description].periods[periodKey] = entry.amount;
             } else {
@@ -236,11 +287,20 @@ export class App {
   }
 
   getAmount(bank: string, description: string, period: string, type: 'outgoing' | 'incoming'): number {
+    let baseAmount = 0;
+    let entryId = '';
+    
     if (type === 'incoming') {
-      return this.incomingEntries[description]?.periods[period] || 0;
+      baseAmount = this.incomingEntries[description]?.periods[period] || 0;
+      entryId = this.getIncomingEntryId(description);
     } else {
-      return this.bankGroups[bank]?.outgoing[description]?.periods[period] || 0;
+      baseAmount = this.bankGroups[bank]?.outgoing[description]?.periods[period] || 0;
+      entryId = this.getEntryId(bank, description);
     }
+    
+    // Add cell-specific adjustment for this period
+    const adjustment = this.cellAdjustments[entryId]?.[period] || 0;
+    return baseAmount + adjustment;
   }
 
   getEntryId(bank: string, description: string): string {
@@ -263,9 +323,7 @@ export class App {
   getTotalOutgoing(period: string): number {
     let total = 0;
     Object.keys(this.bankGroups).forEach(bank => {
-      Object.keys(this.bankGroups[bank].outgoing).forEach(desc => {
-        total += this.bankGroups[bank].outgoing[desc].periods[period] || 0;
-      });
+      total += this.getBankTotal(bank, period);
     });
     return total;
   }
@@ -273,7 +331,7 @@ export class App {
   getTotalIncoming(period: string): number {
     let total = 0;
     Object.keys(this.incomingEntries).forEach(desc => {
-      total += this.incomingEntries[desc].periods[period] || 0;
+      total += this.getAmount('', desc, period, 'incoming');
     });
     return total;
   }
@@ -297,6 +355,63 @@ export class App {
     return this.getNet(period) + this.getPreviousPeriodAdjustment(period);
   }
 
+  getBankTotal(bank: string, period: string): number {
+    let total = 0;
+    if (this.bankGroups[bank]) {
+      Object.keys(this.bankGroups[bank].outgoing).forEach(desc => {
+        total += this.getAmount(bank, desc, period, 'outgoing');
+      });
+    }
+    // Add bank-specific adjustment for this period
+    const adjustment = this.bankAdjustments[bank]?.[period] || 0;
+    return total + adjustment;
+  }
+
+  startBankCellEdit(bank: string, period: string): void {
+    const currentTotal = this.getBankTotal(bank, period);
+    this.editingBankCell = { bank, period };
+    this.editingValue = currentTotal.toString();
+  }
+
+  saveBankCellEdit(): void {
+    if (!this.editingBankCell) return;
+    
+    const { bank, period } = this.editingBankCell;
+    const newTotal = parseFloat(this.editingValue) || 0;
+    
+    // Calculate current total from entries
+    let entriesTotal = 0;
+    if (this.bankGroups[bank]) {
+      Object.keys(this.bankGroups[bank].outgoing).forEach(desc => {
+        entriesTotal += this.bankGroups[bank].outgoing[desc].periods[period] || 0;
+      });
+    }
+    
+    // Calculate adjustment needed
+    const adjustment = newTotal - entriesTotal;
+    
+    // Initialize bank adjustments if needed
+    if (!this.bankAdjustments[bank]) {
+      this.bankAdjustments[bank] = {};
+    }
+    
+    // Store the adjustment
+    this.bankAdjustments[bank][period] = adjustment;
+    
+    this.saveEntries();
+    this.editingBankCell = null;
+    this.editingValue = '';
+  }
+
+  cancelBankCellEdit(): void {
+    this.editingBankCell = null;
+    this.editingValue = '';
+  }
+
+  isBankEditing(bank: string, period: string): boolean {
+    return this.editingBankCell?.bank === bank && this.editingBankCell?.period === period;
+  }
+
   toggleFabMenu(): void {
     this.showFabMenu = !this.showFabMenu;
   }
@@ -309,12 +424,44 @@ export class App {
   saveCellEdit(): void {
     if (!this.editingCell) return;
     
-    const entry = this.entries.find(e => e.id === this.editingCell!.entryId);
+    const { entryId, period } = this.editingCell;
+    const newValue = parseFloat(this.editingValue) || 0;
+    
+    // Get the original amount for this period from the entry
+    const entry = this.entries.find(e => e.id === entryId);
     if (entry) {
-      const newValue = parseFloat(this.editingValue) || 0;
-      entry.amount = newValue;
+      // Calculate what the original amount would be for this period
+      let originalAmount = 0;
+      const months = this.generateMonths();
+      
+      months.forEach(m => {
+        ["15", "30"].forEach(day => {
+          const monthDate = new Date(m + "-01");
+          const startDate = new Date(entry.startMonth + "-01");
+          const diffMonths = (monthDate.getFullYear() - startDate.getFullYear()) * 12 + (monthDate.getMonth() - startDate.getMonth());
+          
+          const dateLabel = new Date(m + "-01");
+          const monthName = dateLabel.toLocaleString("default", {month: "long"});
+          const periodKey = `${monthName} ${day}th`;
+          
+          if (periodKey === period && diffMonths >= 0 && (entry.cycles === 0 || diffMonths < entry.cycles) && entry.reflection.includes(parseInt(day))) {
+            originalAmount = entry.amount;
+          }
+        });
+      });
+      
+      // Set the cell value directly (not as adjustment)
+      const adjustment = newValue - originalAmount;
+      
+      // Initialize cell adjustments if needed
+      if (!this.cellAdjustments[entryId]) {
+        this.cellAdjustments[entryId] = {};
+      }
+      
+      // Store the adjustment to achieve the desired value
+      this.cellAdjustments[entryId][period] = adjustment;
+      
       this.saveEntries();
-      this.renderPivot();
     }
     
     this.editingCell = null;
@@ -333,6 +480,8 @@ export class App {
   resetData(): void {
     if (confirm('Are you sure you want to delete all data? This action cannot be undone.')) {
       this.entries = [];
+      this.bankAdjustments = {};
+      this.cellAdjustments = {};
       this.saveEntries();
       this.renderPivot();
     }
