@@ -53,7 +53,9 @@ export class App {
   cellAdjustments: { [entryId: string]: { [period: string]: number } } = {};
   editingCell: { entryId: string; period: string } | null = null;
   editingBankCell: { bank: string; period: string } | null = null;
+  editingAdjustmentCell: { period: string } | null = null;
   editingValue = '';
+  adjustmentOverrides: { [period: string]: number } = {};
 
   constructor() {
     this.loadEntries();
@@ -93,6 +95,7 @@ export class App {
       });
       this.bankAdjustments = JSON.parse(localStorage.getItem('bankAdjustments') || '{}');
       this.cellAdjustments = JSON.parse(localStorage.getItem('cellAdjustments') || '{}');
+      this.adjustmentOverrides = JSON.parse(localStorage.getItem('adjustmentOverrides') || '{}');
     }
   }
 
@@ -101,6 +104,7 @@ export class App {
       localStorage.setItem('entries', JSON.stringify(this.entries));
       localStorage.setItem('bankAdjustments', JSON.stringify(this.bankAdjustments));
       localStorage.setItem('cellAdjustments', JSON.stringify(this.cellAdjustments));
+      localStorage.setItem('adjustmentOverrides', JSON.stringify(this.adjustmentOverrides));
     }
   }
 
@@ -209,7 +213,7 @@ export class App {
   private generateMonths(): string[] {
     const months = [];
     const today = new Date();
-    today.setDate(1);
+    today.setDate(today.getDate() - 15);
     for (let i = 0; i < 12; i++) {
       const m = new Date(today.getFullYear(), today.getMonth() + i + 1, 1);
       months.push(m.toISOString().slice(0, 7));
@@ -221,6 +225,7 @@ export class App {
     const months = this.generateMonths();
     this.periods = [];
     const today = new Date();
+    today.setDate(today.getDate() - 15);
     
     months.forEach(m => {
       ["15", "30"].forEach(day => {
@@ -341,6 +346,10 @@ export class App {
   }
 
   getPreviousPeriodAdjustment(period: string): number {
+    if (this.adjustmentOverrides[period] !== undefined) {
+      return this.adjustmentOverrides[period];
+    }
+    
     const currentIndex = this.periods.indexOf(period);
     if (currentIndex <= 0) return 0;
     
@@ -477,11 +486,39 @@ export class App {
     return this.editingCell?.entryId === entryId && this.editingCell?.period === period;
   }
 
+  startAdjustmentCellEdit(period: string): void {
+    const currentValue = this.getPreviousPeriodAdjustment(period);
+    this.editingAdjustmentCell = { period };
+    this.editingValue = currentValue.toString();
+  }
+
+  saveAdjustmentCellEdit(): void {
+    if (!this.editingAdjustmentCell) return;
+    
+    const { period } = this.editingAdjustmentCell;
+    const newValue = parseFloat(this.editingValue) || 0;
+    
+    this.adjustmentOverrides[period] = newValue;
+    this.saveEntries();
+    this.editingAdjustmentCell = null;
+    this.editingValue = '';
+  }
+
+  cancelAdjustmentCellEdit(): void {
+    this.editingAdjustmentCell = null;
+    this.editingValue = '';
+  }
+
+  isAdjustmentEditing(period: string): boolean {
+    return this.editingAdjustmentCell?.period === period;
+  }
+
   resetData(): void {
     if (confirm('Are you sure you want to delete all data? This action cannot be undone.')) {
       this.entries = [];
       this.bankAdjustments = {};
       this.cellAdjustments = {};
+      this.adjustmentOverrides = {};
       this.saveEntries();
       this.renderPivot();
     }

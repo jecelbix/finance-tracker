@@ -119,7 +119,7 @@
                              type="number" 
                              step="0.01">
                     } @else {
-                      {{getAmount('', desc, period, 'incoming') > 0 ? '+' + (getAmount('', desc, period, 'incoming') | number:'1.2-2') : ''}}
+                      {{getAmount('', desc, period, 'incoming') > 0 ? '+' + (getAmount('', desc, period, 'incoming') | number:'1.2-2') : '0.00'}}
                     }
                   </td>
                 }
@@ -163,8 +163,21 @@
             <td class="sticky-cell"></td>
             <td class="sticky-cell"><strong>Previous Period Adjustment</strong></td>
             @for (period of periods; track period) {
-              <td class="amount sticky-cell" [class.positive]="getPreviousPeriodAdjustment(period) > 0" [class.negative]="getPreviousPeriodAdjustment(period) < 0">
-                <strong>{{getPreviousPeriodAdjustment(period) > 0 ? '+' : ''}}{{getPreviousPeriodAdjustment(period) | number:'1.2-2'}}</strong>
+              <td class="amount sticky-cell editable-cell" 
+                  [class.positive]="getPreviousPeriodAdjustment(period) > 0" 
+                  [class.negative]="getPreviousPeriodAdjustment(period) < 0"
+                  (click)="startAdjustmentCellEdit(period)">
+                @if (isAdjustmentEditing(period)) {
+                  <input class="editing-input" 
+                         [(ngModel)]="editingValue" 
+                         (blur)="saveAdjustmentCellEdit()" 
+                         (keydown.enter)="saveAdjustmentCellEdit()" 
+                         (keydown.escape)="cancelAdjustmentCellEdit()" 
+                         type="number" 
+                         step="0.01">
+                } @else {
+                  <strong>{{getPreviousPeriodAdjustment(period) > 0 ? '+' : ''}}{{getPreviousPeriodAdjustment(period) | number:'1.2-2'}}</strong>
+                }
               </td>
             }
           </tr>
@@ -178,10 +191,15 @@
               </td>
             }
           </tr>
+
+          <tr class="total-row spacer">
+            <td class="sticky-cell" [attr.colspan]="periods.length + 3">
+              <div class="end-spacer"></div>
+            </td>
+          </tr>
         </tfoot>
       </table>
     </mat-card>
-    <div class="end-spacer"></div>
   </div>
 </div>
 
