@@ -46,7 +46,21 @@
 .pivot-table-card {
   overflow: auto;
   box-shadow: none;
-  max-height: calc(100vh - 106px);
+  max-height: calc(100vh - 54px);
+}
+
+.pivot-table-card::-webkit-scrollbar {
+  display: none;
+}
+
+/* For Firefox */
+.pivot-table-card {
+  scrollbar-width: none;
+}
+
+/* For Internet Explorer */
+.pivot-table-card {
+  -ms-overflow-style: none;
 }
 
 .mat-table {
@@ -194,10 +208,10 @@
   }
   
   &.net-total {
-    background-color: #e3f2fd !important;
+    background-color: #f3e5f5 !important;
     
     .sticky-cell {
-      background-color: #e3f2fd !important;
+      background-color: #f3e5f5 !important;
     }
   }
   
@@ -210,10 +224,18 @@
   }
   
   &.final-balance {
-    background-color: #f3e5f5 !important;
+    background-color: #e3f2fd !important;
     
     .sticky-cell {
-      background-color: #f3e5f5 !important;
+      background-color: #e3f2fd !important;
+    }
+  }
+
+  &.spacer {
+    background-color: #e3f2fd !important;
+    
+    .sticky-cell {
+      background-color: #e3f2fd !important;
     }
   }
 }
@@ -278,7 +300,6 @@
 }
 
 .end-spacer {
-  height: 50px;
+  height: 100px;
   width: 100%;
-
 }
