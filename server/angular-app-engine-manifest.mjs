@@ -1,6 +1,6 @@
 
 export default {
-  basePath: '/finance-tracker',
+  basePath: 'https://jecelbix.github.io/finance-tracker',
   supportedLocales: {
   "en-US": ""
 },
