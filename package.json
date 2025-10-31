@@ -7,7 +7,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "serve:ssr:finance-tracker": "node dist/finance-tracker/server/server.mjs"
+    "serve:ssr:finance-tracker": "node dist/finance-tracker/server/server.mjs",
+    "deploy": "ng build --configuration production --base-href 'https://jecelbix.github.io/finance-tracker' && npx angular-cli-ghpages --dir=dist/finance-tracker/browser"
   },
   "prettier": {
     "printWidth": 100,
